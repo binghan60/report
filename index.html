@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>不用建模做 3D 動畫 - 實戰案例版</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* 基礎樣式重置 */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* 全域與區塊捲軸樣式 (配合主題) */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0a0a0a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { 
+            background: rgba(34, 197, 94, 0.4); 
+            border-radius: 4px; 
+            border: 1px solid rgba(255, 255, 255, 0.05); 
+        }
+        ::-webkit-scrollbar-thumb:hover { background: #22c55e; }
+        
+        body { 
+            background-color: #000; 
+            font-family: 'Urbanist', 'Noto+Sans+TC', sans-serif;
+            color: #f8fafc;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* 全螢幕投影片容器 */
+        .slide-container { 
+            background-color: #000; 
+            display: none; 
+            flex-direction: column; 
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden; 
+            padding: 60px 8%; 
+            position: relative; 
+        }
+
+        .slide-container.active {
+            display: flex;
+            animation: slideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 裝飾背景 */
+        .slide-container::before { 
+            content: ''; position: absolute; top: -10%; right: -10%; width: 40%; height: 40%; 
+            background: radial-gradient(circle, rgba(34, 197, 94, 0.12) 0%, transparent 70%); 
+            z-index: 0; 
+        }
+
+        .slide-container > * { position: relative; z-index: 1; }
+
+        h1, h2, h3 { margin: 0; font-weight: 700; color: #fff; }
+        h1 span, h2 span { color: #22c55e; }
+        p, li { color: #94a3b8; font-size: clamp(1rem, 2vw, 1.4rem); line-height: 1.6; }
+
+        .slide-title { 
+            font-size: clamp(32px, 5vw, 64px); 
+            margin-bottom: 40px; 
+            border-left: 8px solid #22c55e; 
+            padding-left: 25px; 
+        }
+        
+        .content-area { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; overflow: hidden; }
+
+        .title-layout { text-align: center; width: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; }
+        .title-layout h1 { font-size: clamp(48px, 8vw, 96px); margin-bottom: 20px; }
+        .title-layout .subtitle { font-size: 1.5rem; color: #22c55e; letter-spacing: 6px; margin-bottom: 10px; }
+
+        .prompt-layout { text-align: left; width: 100%; }
+        .prompt-layout h2 { font-size: clamp(2rem, 4vw, 3rem); margin-bottom: 25px; color: #22c55e; }
+        .prompt-box { 
+            background: rgba(34, 197, 94, 0.05); 
+            border: 2px dashed rgba(34, 197, 94, 0.3); 
+            padding: 30px; 
+            border-radius: 20px; 
+            font-family: 'Noto+Sans+TC', sans-serif;
+            font-size: clamp(1rem, 1.5vw, 1.4rem);
+            color: #e2e8f0;
+            line-height: 1.8;
+            position: relative;
+        }
+        .prompt-box::before {
+            content: '\f10d';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            top: -15px;
+            left: 20px;
+            background: #000;
+            padding: 0 10px;
+            color: #22c55e;
+            font-size: 1.2rem;
+        }
+
+        .two-column { display: flex; gap: 5%; width: 100%; height: 100%; align-items: center; }
+        .content-container { width: 45%; }
+        
+        /* 視覺容器 */
+        .visual-container { 
+            width: 50%; 
+            height: 80%; 
+            background: #0a0a0a; 
+            border-radius: 12px; 
+            border: 1px solid rgba(255,255,255,0.05); 
+            overflow: hidden; 
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            cursor: pointer;
+        }
+
+        /* 自定義播放按鈕 */
+        .play-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90px;
+            height: 90px;
+            background: rgba(34, 197, 94, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-size: 2.5rem;
+            z-index: 10;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 0 30px rgba(34, 197, 94, 0.5);
+        }
+
+        .play-overlay i { margin-left: 5px; }
+
+        .play-overlay:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+            background: #22c55e;
+            box-shadow: 0 0 40px rgba(34, 197, 94, 0.8);
+        }
+
+        .visual-container.playing .play-overlay {
+            opacity: 0;
+            visibility: hidden;
+            transform: translate(-50%, -50%) scale(1.4);
+        }
+
+        .visual-container img, .visual-container video { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+        }
+
+        .visual-tag { 
+            position: absolute; top: 20px; left: 20px; 
+            background: rgba(34, 197, 94, 0.9); color: #000; 
+            padding: 6px 16px; border-radius: 20px; 
+            font-weight: 700; font-size: 0.9rem; z-index: 5; 
+        }
+
+        .bullet-list { list-style: none; padding: 0; }
+        .bullet-list li { position: relative; padding-left: 45px; margin-bottom: 25px; font-size: clamp(1.1rem, 1.8vw, 1.3rem); }
+        .bullet-list li::before { 
+            content: '\f058'; font-family: 'Font Awesome 6 Free'; font-weight: 900; 
+            position: absolute; left: 0; color: #22c55e; 
+        }
+
+        .compare-box { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; height: 100%; padding: 20px; }
+        .compare-item { display: flex; flex-direction: column; height: 100%; }
+        .compare-item img { flex-grow: 1; border-radius: 8px; border: 1px solid #334155; object-fit: cover; width: 100%; height: 200px; }
+        .compare-label { margin-top: 12px; color: #22c55e; font-size: 1rem; text-align: center; font-weight: 500; }
+
+        .frame-grid { 
+            display: grid; 
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 10px; 
+            width: 100%; 
+            height: 100%; 
+            padding: 10px; 
+        }
+        .frame-grid img { 
+            width: 100%; 
+            height: auto; 
+            aspect-ratio: 16/9;
+            object-fit: cover; 
+            border-radius: 4px; 
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .code-block { 
+            background: #0f172a; padding: 30px; border-radius: 12px; 
+            font-family: 'Fira Code', monospace; font-size: 1.1rem; color: #e2e8f0; 
+            border-left: 6px solid #22c55e;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        /* 雙卡片指令樣式 */
+        .prompt-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .prompt-card {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 30px;
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .prompt-card:hover {
+            transform: translateY(-10px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(34, 197, 94, 0.2);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+        .card-visual {
+            width: 100%;
+            height: 300px;
+            border-radius: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+        .card-visual img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .prompt-card .prompt-box {
+            padding: 25px;
+            font-size: 1.1rem;
+            flex-grow: 1;
+            border-style: solid;
+            background: rgba(0,0,0,0.2);
+        }
+        .prompt-card .prompt-box::before {
+            font-size: 1.2rem;
+            top: -15px;
+        }
+
+        /* 底部資訊 */
+        .footer { 
+            position: absolute; bottom: 30px; left: 8%; right: 8%; 
+            display: flex; justify-content: space-between; 
+            font-size: 0.9rem; color: #475569; border-top: 1px solid rgba(255,255,255,0.05);
+            padding-top: 15px;
+        }
+
+        /* 導航按鈕 */
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.02);
+            border: none;
+            color: rgba(255, 255, 255, 0.2);
+            font-size: 2.5rem;
+            width: 80px;
+            height: 100%;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 10;
+        }
+        .nav-btn:hover { background: rgba(34, 197, 94, 0.05); color: #22c55e; }
+        .nav-btn.prev { left: 0; }
+        .nav-btn.next { right: 0; }
+
+        /* 全螢幕切換按鈕 */
+        .fullscreen-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            z-index: 20;
+            font-size: 0.8rem;
+            transition: 0.2s;
+        }
+        .fullscreen-toggle:hover { background: #22c55e; color: #000; border-color: #22c55e; }
+
+        .controls-hint {
+            position: absolute;
+            bottom: 35px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #334155;
+            font-size: 0.8rem;
+            z-index: 10;
+        }
+
+        @media (max-width: 1024px) {
+            .two-column { flex-direction: column; justify-content: center; }
+            .content-container, .visual-container { width: 100%; height: auto; }
+            .visual-container { max-height: 40vh; }
+            .nav-btn { width: 40px; font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+<button class="fullscreen-toggle" onclick="toggleFullScreen()">
+    <i class="fa-solid fa-expand"></i> 全螢幕模式
+</button>
+
+<!-- Navigation Buttons -->
+<button class="nav-btn prev" onclick="prevSlide()"><i class="fa-solid fa-chevron-left"></i></button>
+<button class="nav-btn next" onclick="nextSlide()"><i class="fa-solid fa-chevron-right"></i></button>
+
+<!-- Slide 1 -->
+<div class="slide-container active">
+    <div class="title-layout">
+        <h1>不用建模做 <span>3D 動畫</span></h1>
+        <p>實戰流程：從廢棄物到森林重生</p>
+    </div>
+    <div class="footer"><span> </span><span>01 / 08</span></div>
+</div>
+
+<!-- Slide 2 (Step 1) -->
+<div class="slide-container">
+    <h2 class="slide-title">1. 素材準備：<span>開始圖 & 結束圖</span></h2>
+    <div class="content-area">
+        <div class="two-column">
+            <div class="content-container">
+                <h3>確立視覺對比</h3>
+                <p>在製作轉化動畫前，我們需要準備兩張關鍵素材：</p>
+                <ul class="bullet-list">
+                    <li><strong>開始圖：</strong>廢棄物、生鏽罐頭、乾裂大地。</li>
+                    <li><strong>結束圖：</strong>充滿綠意的新生森林。</li>
+                </ul>
+            </div>
+            <div class="visual-container">
+                <div class="compare-box">
+                    <div class="compare-item">
+                        <img src="image/start.jpeg" onerror="this.src='https://images.unsplash.com/photo-1532187863486-abf9d3a3c956?auto=format&fit=crop&w=400'">
+                        <div class="compare-label">開始圖 (Start)</div>
+                    </div>
+                    <div class="compare-item">
+                        <img src="image/end.jpeg" onerror="this.src='https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&w=400'">
+                        <div class="compare-label">結束圖 (End)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="footer"><span>Step 1: Preparation</span><span>02 / 08</span></div>
+</div>
+
+<!-- Slide 3 (Step 2: Whisk & Prompts) -->
+<div class="slide-container">
+    <h2 class="slide-title">2. 使用 <span>Whisk</span> 生成提示詞與結束圖</h2>
+    <div class="content-area" style="flex-direction: column;">
+        <div class="prompt-grid">
+            <div class="prompt-card">
+                <div class="card-visual">
+                    <img src="image/start.jpeg" alt="Start Image">
+                    <div class="visual-tag">START IMAGE</div>
+                </div>
+                <div class="prompt-box">
+                    龜裂乾旱的大地表面，生鏽汽水罐、破舊輪胎與枯草散落其上，陰天自然光，柔和光線
+                </div>
+            </div>
+            <div class="prompt-card" style="border-color: rgba(34, 197, 94, 0.3);">
+                <div class="card-visual">
+                    <img src="image/end.jpeg" alt="End Image">
+                    <div class="visual-tag" style="background: #22c55e;">END IMAGE (WHISK)</div>
+                </div>
+                <div class="prompt-box">
+                    高細節紋理寫實風格充滿活力的綠色樹苗從濕潤深色泥土中生長，周圍點綴彩色小野花，清晨自然光，柔和光線，葉片上有露珠，
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer"><span>Step 2: Generation & Consistency</span><span>03 / 08</span></div>
+</div>
+
+<!-- Slide 4 (Step 3: Animation & Prompt) -->
+<div class="slide-container">
+    <h2 class="slide-title">3. 使用 <span>Flow</span> 生成轉化動畫</h2>
+    <div class="content-area">
+        <div class="two-column">
+            <div class="content-container">
+                <p style="color: #22c55e; letter-spacing: 2px;">FLOW ANIMATION PROMPT</p>
+                <div class="prompt-box" style="font-size: 1.1rem; margin-top: 20px;">
+                    一段流暢、連續的過場畫面。地表上的鏽鐵與寶特瓶溶解消失，同時一株生機蓬勃的幼苗與鮮綠苔蘚自土中破土而出，取代原有的廢棄物。鏡頭特寫材質從人工製品轉變為有機生物的過程。
+                </div>
+                <ul class="bullet-list" style="margin-top: 30px;">
+                    <li>動態過渡：金屬溶解 vs 植物成長。</li>
+                    <li>近景鏡頭：強調材質轉變質感。</li>
+                </ul>
+            </div>
+            <div class="visual-container" id="videoContainer">
+                <div class="visual-tag">GENERATED VIDEO</div>
+                <button class="play-overlay"><i class="fa-solid fa-play"></i></button>
+                <video id="myVideo" muted>
+                    <source src="image/video.mp4" type="video/mp4">
+                    <div style="padding: 20px; text-align: center; color: #444;">影片路徑錯誤</div>
+                </video>
+            </div>
+        </div>
+    </div>
+    <div class="footer"><span>Step 3: Animation & Prompt Strategy</span><span>04 / 08</span></div>
+</div>
+
+<!-- Slide 8 (Step 4) -->
+<div class="slide-container">
+    <h2 class="slide-title">4. 影片使用 <span>分割截圖工具</span></h2>
+    <div class="content-area">
+        <div class="two-column">
+            <div class="visual-container">
+                <div class="visual-tag">FRAMES SEQUENCE (1-16)</div>
+                <div class="frame-grid">
+                    <img src="image/ezgif/ezgif-frame-001.jpg">
+                    <img src="image/ezgif/ezgif-frame-002.jpg">
+                    <img src="image/ezgif/ezgif-frame-003.jpg">
+                    <img src="image/ezgif/ezgif-frame-004.jpg">
+                    <img src="image/ezgif/ezgif-frame-005.jpg">
+                    <img src="image/ezgif/ezgif-frame-006.jpg">
+                    <img src="image/ezgif/ezgif-frame-007.jpg">
+                    <img src="image/ezgif/ezgif-frame-008.jpg">
+                    <img src="image/ezgif/ezgif-frame-009.jpg">
+                    <img src="image/ezgif/ezgif-frame-010.jpg">
+                    <img src="image/ezgif/ezgif-frame-011.jpg">
+                    <img src="image/ezgif/ezgif-frame-012.jpg">
+                    <img src="image/ezgif/ezgif-frame-013.jpg">
+                    <img src="image/ezgif/ezgif-frame-014.jpg">
+                    <img src="image/ezgif/ezgif-frame-015.jpg">
+                    <img src="image/ezgif/ezgif-frame-016.jpg">
+                </div>
+            </div>
+            <div class="content-container">
+                <h3>轉化為可控資源</h3>
+                <ul class="bullet-list">
+                    <li>使用 FFmpeg 分割為圖片序列。</li>
+                    <li>每一張圖都是 3D 動畫的一幀。</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="footer"><span>Step 4: Deconstruction</span><span>05 / 08</span></div>
+</div>
+
+<!-- Slide 6 (Step 5: Logic) -->
+<div class="slide-container">
+    <h2 class="slide-title">5. 實作效果：<span>開發邏輯</span></h2>
+    <div class="content-area">
+        <div class="two-column">
+            <div class="content-container">
+                <h3>Canvas 滾動觸發</h3>
+                <div class="code-block">
+                    ctx.drawImage(images[currentFrame], 0, 0);<br>
+                    // 根據 Scroll 進度切換索引
+                </div>
+            </div>
+            <div class="visual-container">
+                <img src="https://images.unsplash.com/photo-1542831371-29b0f74f9713?auto=format&fit=crop&w=800">
+                <div class="visual-tag">IDE / CODE</div>
+            </div>
+        </div>
+    </div>
+    <div class="footer"><span>Step 5: Logic</span><span>06 / 08</span></div>
+</div>
+
+<!-- Slide 7 (Step 5: Result) -->
+<div class="slide-container">
+    <h2 class="slide-title">5. 實作效果：<span>成果展示</span></h2>
+    <div class="content-area" style="padding-bottom: 20px;">
+        <div class="visual-container" id="practiceScrollBox" style="width: 100%; height: 100%; max-width: 1600px; margin: 0 auto; overflow-y: auto; display: block;">
+            <div style="height: 600%; position: relative;">
+                <canvas id="practiceCanvas" style="position: sticky; top: 0; width: 100%; height: 16.666%; object-fit: contain; display: block; border-radius: 12px;"></canvas>
+            </div>
+            <div class="visual-tag" style="position: absolute; top: 20px; left: 20px; z-index: 10;">向下滾動查看成果</div>
+        </div>
+    </div>
+    <div class="footer"><span>Step 5: Result</span><span>07 / 08</span></div>
+</div>
+
+<!-- Slide 10 (Finish) -->
+<div class="slide-container">
+    <div class="title-layout">
+        <h1>從此告別傳統建模</h1>
+        <p>AI 讓視覺敘事變得前所未有的簡單且強大。</p>
+        <div style="margin-top: 50px; font-size: 5rem; color: #22c55e;">
+            <i class="fa-solid fa-seedling"></i>
+        </div>
+    </div>
+    <div class="footer"><span>Finish</span><span>08 / 08</span></div>
+</div>
+
+<div class="controls-hint">
+    <span>按 <kbd>F11</kbd> 或點擊右上角進入全螢幕</span>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+<script>
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide-container');
+
+    function showSlide(index) {
+        slides.forEach(slide => slide.classList.remove('active'));
+        
+        if (index >= slides.length) {
+            currentSlide = slides.length - 1;
+        } else if (index < 0) {
+            currentSlide = 0;
+        } else {
+            currentSlide = index;
+        }
+        
+        slides[currentSlide].classList.add('active');
+        
+        if (typeof ScrollTrigger !== 'undefined') {
+            setTimeout(() => {
+                ScrollTrigger.refresh();
+            }, 100);
+        }
+    }
+
+    function nextSlide() {
+        if (currentSlide < slides.length - 1) {
+            showSlide(currentSlide + 1);
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            showSlide(currentSlide - 1);
+        }
+    }
+
+    function toggleFullScreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ') {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        } else if (e.key.toLowerCase() === 'f') {
+            toggleFullScreen();
+        }
+    });
+
+    // Initial setup
+    showSlide(currentSlide);
+
+    // Video Play/Pause Logic
+    const video = document.getElementById('myVideo');
+    const videoContainer = document.getElementById('videoContainer');
+
+    videoContainer.addEventListener('click', () => {
+        if (video.paused) {
+            video.play();
+            videoContainer.classList.add('playing');
+        } else {
+            video.pause();
+            videoContainer.classList.remove('playing');
+        }
+    });
+
+    video.addEventListener('ended', () => {
+        videoContainer.classList.remove('playing');
+    });
+
+    // 實作 Practice 圖片序列 ScrollTrigger
+    gsap.registerPlugin(ScrollTrigger);
+
+    const pracCanvas = document.getElementById("practiceCanvas");
+    if (pracCanvas) {
+        const pracContext = pracCanvas.getContext("2d");
+        pracCanvas.width = 1920; 
+        pracCanvas.height = 1080;
+
+        const pracFrameCount = 80;
+        const getPracFrame = index => (
+            `image/practice/ezgif-frame-${(index + 1).toString().padStart(3, '0')}.jpg`
+        );
+
+        const pracImages = [];
+        const pracSeq = { frame: 0 };
+
+        for (let i = 0; i < pracFrameCount; i++) {
+            const img = new Image();
+            img.src = getPracFrame(i);
+            pracImages.push(img);
+        }
+
+        pracImages[0].onload = () => {
+            pracContext.clearRect(0, 0, pracCanvas.width, pracCanvas.height);
+            pracContext.drawImage(pracImages[0], 0, 0, pracCanvas.width, pracCanvas.height);
+        };
+
+        function renderPrac() {
+            pracContext.clearRect(0, 0, pracCanvas.width, pracCanvas.height);
+            pracContext.drawImage(pracImages[pracSeq.frame], 0, 0, pracCanvas.width, pracCanvas.height);
+        }
+
+        gsap.to(pracSeq, {
+            frame: pracFrameCount - 1,
+            snap: "frame",
+            ease: "none",
+            scrollTrigger: {
+                trigger: "#practiceScrollBox > div",
+                scroller: "#practiceScrollBox",
+                start: "top top",
+                end: "bottom bottom",
+                scrub: 1 
+            },
+            onUpdate: renderPrac
+        });
+    }
+</script>
+</body>
+</html>
